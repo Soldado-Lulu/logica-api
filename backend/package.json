@@ -1,0 +1,17 @@
+{
+  "name": "logica-api-backend",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Laboratorio de API REST con Express + PostgreSQL",
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "pg": "^8.13.1"
+  }
+}

@@ -1,232 +1,249 @@
-# logica-api 🧠
+# logica-api — Laboratorio de Node.js, Express y PostgreSQL
 
-Laboratorio progresivo para aprender **API REST con Node.js, Express y PostgreSQL**.
-
-**Esta primera version trae solamente Docker + PostgreSQL + datos de prueba**. Todavia NO hay backend, endpoints, middlewares ni schemas: el objetivo es que los programes tu mismo para entender el flujo `ruta -> controller -> service -> consulta SQL`.
+Proyecto para aprender **API REST de forma progresiva**. Empiezas con dos endpoints GET ya funcionando; el resto de endpoints, condiciones, bucles, validaciones y transacciones son ejercicios para que los programes.
 
 ## 1. Requisitos
 
-- Docker Desktop en ejecucion (Windows) o Docker Engine + Compose.
-- Opcional: DBeaver, pgAdmin o `psql` para ver las tablas.
-- Mas adelante: Node.js y Bruno/Postman para probar tus endpoints.
+- Docker Desktop abierto (con motor de Linux/WSL 2 si usas Windows).
+- Opcional: Node.js 22+ instalado si quieres ejecutar Express fuera de Docker.
+- Bruno/Postman para las pruebas y VS Code para editar.
 
-## 2. Crear y levantar la base de datos
+## 2. Inicio rápido: TODO en Docker
 
-**Windows PowerShell** (ejecutar dentro del proyecto):
+Abre PowerShell **dentro de la carpeta `logica-api`** (donde está `docker-compose.yml`):
 
 ```powershell
 Copy-Item .env.example .env
-docker compose up -d
+docker compose up -d --build
 docker compose ps
+docker compose logs -f backend
 ```
 
-**Linux / macOS:**
+Espera a ver `PostgreSQL conectado:` y `API lista en http://localhost:3000`. Usa Ctrl+C para dejar de leer logs (sin apagar los contenedores).
 
-```bash
-cp .env.example .env
-docker compose up -d
-docker compose ps
+Prueba desde navegador, Bruno o Postman:
+
+| Método | URL | Resultado esperado |
+|---|---|---|
+| GET | `http://localhost:3000/api/health` | `ok: true`, BD conectada |
+| GET | `http://localhost:3000/api/clientes` | 10 clientes, incluidos VIP e inactivos |
+| GET | `http://localhost:3000/api/productos` | 16 productos y nombre de la categoría (JOIN) |
+
+> Con el volumen recién creado, `01_esquema.sql`, `02_datos_prueba.sql` y `03_seed_gets.sql` se ejecutan automáticamente en ese orden. **No es necesario ejecutar seeders adicionales la primera vez.**
+
+### Si ya tenías un volumen PostgreSQL de la versión anterior
+
+Docker **NO repite los archivos init** cuando el volumen ya existía. Puedes agregar únicamente los nuevos datos sin perder lo anterior:
+
+```powershell
+docker compose up -d --build
+docker compose exec postgres psql -v ON_ERROR_STOP=1 -U logica_user -d logica_api -f /docker-entrypoint-initdb.d/03_seed_gets.sql
 ```
 
-Comprobar que existan las tablas:
+El `03_seed_gets.sql` es repetible para los datos semilla; evita duplicar registros y descontar stock dos veces. Si **quieres borrar todos los datos de práctica y empezar de cero**, y SOLO si no necesitas conservar nada:
 
-```bash
-docker compose exec postgres psql -U logica_user -d logica_api -c '\dt'
+```powershell
+docker compose down -v
+docker compose up -d --build
 ```
 
-Si quieres abrir el cliente interactivo:
+`down -v` **borra permanentemente el volumen de este laboratorio**. ¡No lo uses en sistemas reales!
 
-```bash
-docker compose exec postgres psql -U logica_user -d logica_api
+## 3. Alternativa: PostgreSQL en Docker + Express local
+
+Útil si prefieres ver `console.log` de Node directamente en tu terminal de VS Code:
+
+```powershell
+# Desde la raíz:
+Copy-Item .env.example .env
+docker compose up -d postgres
+cd backend
+npm install
+npm run dev
 ```
 
-Prueba estas consultas en `psql` (termina con `;`):
+En este caso el archivo `.env` raíz tiene `DB_HOST=localhost` y `DB_PORT=5435`. Cierra `npm run dev` con Ctrl+C.
 
-```sql
-SELECT id, nombres, correo, tipo_cliente FROM clientes;
-SELECT id, sku, nombre, precio, stock FROM productos ORDER BY id;
-SELECT referencia, estado, total FROM pedidos;
+**No ejecutes al mismo tiempo** `npm run dev` local y `backend` en Docker: ambos intentarán ocupar el puerto `3000`. Si levantaste ambos contenedores y luego decides usar Node local, detén solo el backend de Docker:
+
+```powershell
+docker compose stop backend
 ```
 
-Para salir de `psql` usa `\q`.
+## 4. Configuración y conexiones
 
-## 3. Conectar DBeaver, pgAdmin o Node.js
+| Desde | DB_HOST | DB_PORT | Acceso a API |
+|---|---|---|---|
+| Backend dentro de Compose | `postgres` | `5432` | Puerto interno del contenedor `3000` |
+| Backend local en Windows | `localhost` | `5435` | `http://localhost:3000` |
+| DBeaver / pgAdmin en Windows | `localhost` | `5435` | No aplica |
 
-| Campo | Valor de laboratorio |
-|---|---|
-| Host | `localhost` |
-| Puerto | `5435` |
-| Base de datos | `logica_api` |
-| Usuario | `logica_user` |
-| Contraseña | `practica_local_123` (en tu `.env`) |
+Variables en `.env` de la raíz:
 
-Estos valores son **solo para desarrollo local**. El puerto de Docker del host es `5435`; si tu futuro backend corre en otro contenedor de esta misma red Compose, debera usar `postgres:5432` como host/puerto interno.
+```dotenv
+DB_NAME=logica_api
+DB_USER=logica_user
+DB_PASSWORD=practica_local_123
+DB_HOST=localhost
+DB_PORT=5435
+PORT=3000
+```
 
-## 4. Estructura
+Docker Compose sobreescribe `DB_HOST=postgres` y `DB_PORT=5432` **solamente para el contenedor backend**. No debes escribir `localhost:5435` dentro de un contenedor para conectarte a PostgreSQL.
+
+> Credenciales SOLO de laboratorio local. `.env` está en `.gitignore` para evitar subir secretos.
+
+## 5. Carpeta y arquitectura
 
 ```text
 logica-api/
-├── .env.example                  # copiar como .env
-├── .gitignore                    # evita subir .env a GitHub
-├── docker-compose.yml            # PostgreSQL 16 y volumen persistente
+├── .env.example              # copiar a .env (no se sube a Git)
+├── .gitignore
+├── docker-compose.yml        # dos contenedores: postgres + backend
 ├── docker/
 │   └── init/
-│       ├── 01_esquema.sql        # 12 tablas y relaciones
-│       └── 02_datos_prueba.sql   # clientes, productos, pedidos, etc.
-├── practicas/
-│   ├── retos.md                 # retos del mas facil al mas avanzado
-│   ├── cuerpos-post.md         # JSON para probar en Postman/Bruno
-│   └── consultas.sql           # consultas SQL de apoyo
-└── README.md
+│       ├── 01_esquema.sql    # 12 tablas
+│       ├── 02_datos_prueba.sql
+│       └── 03_seed_gets.sql # mas filas y situaciones
+├── backend/
+│   ├── Dockerfile
+│   ├── package.json
+│   ├── .dockerignore
+│   └── src/
+│       ├── server.js         # inicia servidor y verifica conexion
+│       ├── app.js            # JSON, rutas y respuesta 404
+│       ├── config/
+│       │   ├── env.js
+│       │   └── database.js   # pool de pg
+│       └── modules/
+│           ├── clientes/
+│           │   ├── clientes.routes.js
+│           │   ├── clientes.controller.js
+│           │   ├── clientes.service.js
+│           │   └── clientes.repository.js
+│           ├── productos/    # mismo patron
+│           ├── categorias/   # carpetas guía; pendientes
+│           ├── cupones/
+│           ├── pedidos/
+│           ├── pagos/
+│           ├── inventario/
+│           ├── envios/
+│           ├── notificaciones/
+│           ├── solicitudes/
+│           └── reportes/
+└── practicas/
+    ├── ejercicios_modulos.md
+    ├── consultas_para_get.sql
+    ├── retos.md
+    ├── consultas.sql
+    └── cuerpos-post.md
 ```
 
-## 5. Las 12 tablas y su objetivo
-
-| Tabla | Practicas recomendadas |
-|---|---|
-| `clientes` | GET, POST, PUT/PATCH, DELETE logico, filtros VIP/activo |
-| `categorias` | Crear categorias, listar productos relacionados |
-| `productos` | CRUD, filtros de precio, stock y categorias |
-| `cupones` | Condiciones con fechas, usos y descuentos |
-| `pedidos` | Crear una orden, calcular total, cambiar estados |
-| `pedido_detalles` | Recorrer un array con `for...of` y guardar multiples filas |
-| `pagos` | Condicionales por estado y pagos parciales |
-| `movimientos_inventario` | Entradas/salidas y trazabilidad de stock |
-| `envios` | Crear y actualizar seguimiento de un envio |
-| `notificaciones` | Generar mensajes al cumplir ciertas condiciones |
-| `reclamos` | Guardar un tipo de solicitud |
-| `devoluciones` | Guardar otro tipo de solicitud; aprobar o rechazar |
-
-**Relaciones principales:**
+### Flujo real del GET de clientes (ya implementado)
 
 ```text
-clientes ──────< pedidos ──────< pedido_detalles >────── productos >──── categorias
-   │               │                    │                     │
-   │               ├──────< pagos        └──────< devoluciones │
-   │               ├──────  envios                             │
-   │               └──────< movimientos_inventario >───────────┘
-   │
-   ├──────< notificaciones
-   ├──────< reclamos
-   └──────< devoluciones
-
-cupones ──────< pedidos (opcional)
+GET /api/clientes
+  -> app.js: app.use('/api/clientes', clientesRoutes)
+  -> clientes.routes.js: router.get('/', listarClientes)
+  -> clientes.controller.js: try/catch, invoca service y responde JSON
+  -> clientes.service.js: lógica y consulta al repository
+  -> clientes.repository.js: pool.query('SELECT ... FROM clientes')
+  -> PostgreSQL -> JSON al cliente
 ```
 
-`<` significa "muchos"; un cliente puede tener muchos pedidos y un pedido muchos detalles. En este laboratorio un pedido tiene como maximo un envio.
+**Dónde escribir tu lógica:**
 
-## 6. Datos precargados para probar
+- `routes`: URL, método HTTP, orden de rutas.
+- `controller`: lee `req.params`, `req.query`, `req.body`; llama al service, fija código HTTP.
+- `service`: `if`, `for...of`, cálculos, reglas del negocio, transacciones.
+- `repository`: SELECT/INSERT/UPDATE/DELETE; SQL parametrizado con `$1`, `$2`.
+- `config/database.js`: configuración global de conexiones.
 
-- 4 clientes: Ana (regular, activa), Luis (VIP, activo), Maria (regular, activa), Pedro (inactivo).
-- 8 productos: incluye uno sin stock (`AUD-001`), uno inactivo (`WEB-001`) y uno bajo stock minimo (`MON-001`).
-- 5 cupones: valido (`BIENVENIDA10`), `VIP15`, vencido, agotado e inactivo.
-- Pedido `DEMO-001`: pagado por Ana, 230.00, 2 productos, pago QR aprobado.
-- Pedido `DEMO-002`: pendiente de Luis, 50.00, 2 cables.
-- Movimientos historicos de salida, un reclamo y una notificacion.
+Por ahora **NO** incluimos login, roles, middlewares ni schemas. Una vez comprendas el flujo, agrégalos al final.
 
-**Moneda de ejemplo:** los importes pueden tratarse como bolivianos (Bs). PostgreSQL guarda `NUMERIC(12,2)` para evitar errores propios de decimales binarios. En Node, cuida el redondeo a dos decimales.
+## 6. ¿Qué datos encontrarás?
 
-## 7. Tu futuro backend Express
+Después de un inicio **desde cero**, aproximadamente:
 
-Cuando empieces la practica, puedes crear una carpeta `backend/` con una estructura sencilla:
+| Tabla | Registros | Ejemplos de prueba |
+|---|---:|---|
+| clientes | 10 | activos, inactivos, REGULAR, VIP |
+| categorias | 6 | Perifericos, Redes, Oficina... |
+| productos | 16 | stock = 0, stock bajo, inactivos, varios precios |
+| cupones | 5 | vigente, vencido, agotado, inactivo |
+| pedidos | 7 | PENDIENTE, PAGADO, CANCELADO, ENVIADO, ENTREGADO |
+| pedido_detalles | 11 | productos y cantidades por pedido |
+| pagos | 6 | APROBADO, PENDIENTE, RECHAZADO |
+| envios | 2 | EN_CAMINO y ENTREGADO |
+| reclamos | 3 | ALTA, MEDIA, BAJA, diferentes estados |
+| devoluciones | 1 | SOLICITADA |
 
-```text
-backend/
-├── src/
-│   ├── app.js
-│   ├── server.js
-│   ├── config/db.js
-│   ├── routes/
-│   ├── controllers/
-│   ├── services/
-│   └── repositories/
-├── package.json
-└── .env
+Además hay movimientos de inventario y notificaciones. **Números iniciales:** los GET devolvieron estos registros si aún no insertaste nuevos datos.
+
+### Verificar datos sin Postman
+
+```powershell
+docker compose exec postgres psql -U logica_user -d logica_api -c "SELECT COUNT(*) FROM clientes;"
+docker compose exec postgres psql -U logica_user -d logica_api -c "SELECT referencia, estado, total FROM pedidos ORDER BY id;"
+docker compose exec postgres psql -U logica_user -d logica_api -c "SELECT sku, nombre, stock FROM productos ORDER BY id;"
 ```
 
-En tus controladores recibiras JSON en `camelCase` (por ejemplo, `clienteId`) y lo traduciras a columnas SQL `snake_case` (por ejemplo, `cliente_id`).
+## 7. Bruno o Postman
 
-Recorrido esperado de una peticion:
+1. Método `GET`.
+2. URL `http://localhost:3000/api/clientes`.
+3. Pulsa **Send**; deberías ver HTTP `200` y `data` con clientes.
+4. Cambia la URL a `http://localhost:3000/api/productos` y observa el JOIN con categorías.
 
-```text
-Postman / Bruno
-     ↓
-Express (ruta: POST /api/pedidos)
-     ↓
-Controller (lee req.body, envia al service)
-     ↓
-Service (if/else, for...of, calculos, reglas del negocio)
-     ↓
-Repository (consultas SQL parametrizadas)
-     ↓
-PostgreSQL (transaccion, tablas y relaciones)
-     ↓
-Respuesta JSON + codigo HTTP
+Ejemplo de la forma de respuesta:
+
+```json
+{
+  "ok": true,
+  "total": 10,
+  "data": [
+    { "id": "1", "nombres": "Ana", "apellidos": "Rojas", "tipo_cliente": "REGULAR", "activo": true }
+  ]
+}
 ```
 
-**Reglas para practicar sin middleware todavia:** pon la validacion en el service (por ahora), no en una libreria. Usa consultas parametrizadas (`$1`, `$2`, ...), no concatenes valores que vengan del cliente. Mas adelante moveras validacion a schemas y seguridad a middlewares.
+`pg` devuelve por defecto IDs `BIGINT` y decimales `NUMERIC` como **strings**. Esto es normal y evita perder precisión: p.ej. `"id": "1"`, `"precio": "80.00"`. En el ejemplo JSON anterior se muestran solo algunos campos del primer elemento.
 
-## 8. Reglas de negocio acordadas para los retos
+## 8. Cómo avanzar por los módulos
 
-1. Un cliente inactivo no puede hacer un pedido.
-2. Solo puedes vender productos activos y con `stock >= cantidad`.
-3. Un pedido debe tener al menos un detalle; no se repiten productos en el mismo pedido.
-4. El precio lo lee el backend desde la tabla `productos`; nunca lo confia al body.
-5. Al crear pedido en estado `PENDIENTE`, resta stock y agrega un movimiento `SALIDA` por cada producto **en una unica transaccion**.
-6. Al cancelar un pedido `PENDIENTE`, devuelve stock con un movimiento `ENTRADA` por cada producto; no permite cancelar dos veces. Inicialmente limita cancelar a pendientes.
-7. Un pago aprobado cuenta para lo abonado; uno pendiente o rechazado no. Solo marca `PAGADO` cuando el total aprobado cubre exactamente el total del pedido. Rechaza pagos que excedan el saldo.
-8. Cupones: activo, fecha vigente, no agotado y compra minima; si el codigo `VIP15` se utiliza, el cliente debe ser VIP. Los cupones solo se consumen al confirmar la creacion del pedido en la misma transaccion; se reintegran si cancelas el pedido con cupon.
-9. El `subtotal` es la suma de detalles; `total = subtotal - descuento + costo_envio`.
-10. Solo un pedido `PAGADO` puede avanzar a `ENVIADO`; despues a `ENTREGADO`. Se crea un registro en `envios` al despacharlo.
-11. Una devolucion solamente puede solicitarla el propietario de un pedido `PAGADO` o `ENTREGADO` (para el laboratorio); nunca puede devolver mas unidades de las compradas, considerando devoluciones aprobadas y pendientes.
-12. `POST /api/solicitudes` decide la tabla destino segun `tipo`: `RECLAMO` -> `reclamos`; `DEVOLUCION` -> `devoluciones`.
+Sigue **[practicas/ejercicios_modulos.md](practicas/ejercicios_modulos.md)** paso por paso, luego [practicas/retos.md](practicas/retos.md) para los 24 retos avanzados. Usa [practicas/consultas_para_get.sql](practicas/consultas_para_get.sql) para comprobar tus resultados directamente en PostgreSQL.
 
-> **IMPORTANTE:** las restricciones SQL no implementan todas estas reglas; esa es tu tarea en servicios. Para operaciones que afecten varias tablas, usa transacciones `BEGIN`, `COMMIT`, `ROLLBACK`; bloquea filas al comprobar/modificar stock o saldo cuando llegues a concurrencia (`SELECT ... FOR UPDATE`).
+Orden recomendado: clientes -> categorías -> productos -> inventario -> cupones -> pedidos -> pagos -> envíos -> solicitudes -> reportes.
 
-## 9. Retos y cuerpos JSON
+**No desarrolles 12 CRUD completos el primer día.** Trabaja un endpoint, prueba su respuesta, confirma el SQL y realiza casos correctos e incorrectos antes de seguir.
 
-Empieza en **[practicas/retos.md](practicas/retos.md)** y copia los JSON desde **[practicas/cuerpos-post.md](practicas/cuerpos-post.md)** a Bruno o Postman. Las consultas de apoyo estan en **[practicas/consultas.sql](practicas/consultas.sql)**.
+## 9. Comandos útiles
 
-### Que deberia practicar tu API
+```powershell
+docker compose ps
 
-- `GET /api/productos`: lista y filtros.
-- `POST /api/clientes`: insertar datos.
-- `PATCH /api/productos/:id/stock`: reglas por tipo de movimiento.
-- `POST /api/pedidos`: procesar `items[]`, validar, sumar y guardar cabecera + detalles.
-- `POST /api/pagos`: evaluar estados y saldo.
-- `POST /api/solicitudes`: guardar reclamos o devoluciones en tablas diferentes.
-- `PATCH /api/pedidos/:id/cancelar`: deshacer stock de forma segura.
+docker compose logs -f backend   # logs de Express
 
-## 10. Comandos utiles
+docker compose logs -f postgres  # logs de PostgreSQL
 
-```bash
-docker compose logs -f postgres       # observar logs
-docker compose exec postgres psql -U logica_user -d logica_api -c 'SELECT COUNT(*) FROM productos;'
-docker compose stop                   # detener sin borrar datos
-docker compose start                  # volver a arrancar
-docker compose down                   # quitar contenedor, conservar volumen
+docker compose restart backend
+
+docker compose down              # baja contenedores SIN borrar datos
+
+docker compose up -d --build     # reconstruye tras cambios Dockerfile
 ```
 
-**Recrear desde cero (BORRA TODOS LOS DATOS de este laboratorio):**
+Si cambia el código de JS en `backend/src`, `node --watch` lo reinicia automáticamente. En algunos entornos Windows con volúmenes montados puede ser necesario `docker compose restart backend`.
 
-```bash
-docker compose down -v
-docker compose up -d
-```
-
-Los scripts de `docker/init/` **solo se ejecutan al crear por primera vez el volumen de PostgreSQL**. Si editas el `.sql` despues, reiniciar el contenedor no vuelve a ejecutar el init. Para conservar datos y evolucionar el esquema, mas adelante aprenderas migraciones.
-
-## 11. Subir a GitHub
-
-Crea un repositorio publico o privado llamado **`logica-api`**, luego desde la carpeta:
+## 10. GitHub
 
 ```bash
 git init
 git add .
-git commit -m "feat: laboratorio PostgreSQL para practicar API REST"
+git commit -m "feat: laboratorio Express y PostgreSQL con Docker"
 git branch -M main
 git remote add origin https://github.com/TU_USUARIO/logica-api.git
 git push -u origin main
 ```
 
-Sustituye `TU_USUARIO` por tu usuario real y crea el repositorio en GitHub antes del `git push`. El archivo `.env` queda ignorado; `.env.example` si se comparte porque son credenciales locales de demostracion.
+Crea antes el repositorio vacío `logica-api` en GitHub. Comprueba que `.env` no está en el commit mediante `git status`.

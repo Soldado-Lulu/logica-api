@@ -1,5 +1,10 @@
+# Secretos y dependencias
 .env
+**/.env
 node_modules/
-.DS_Store
+**/node_modules/
+# Logs y SO
 *.log
-coverage/
+.DS_Store
+Thumbs.db
+.vscode/

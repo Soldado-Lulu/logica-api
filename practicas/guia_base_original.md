@@ -1,0 +1,232 @@
+# logica-api 🧠
+
+Laboratorio progresivo para aprender **API REST con Node.js, Express y PostgreSQL**.
+
+**Esta primera version trae solamente Docker + PostgreSQL + datos de prueba**. Todavia NO hay backend, endpoints, middlewares ni schemas: el objetivo es que los programes tu mismo para entender el flujo `ruta -> controller -> service -> consulta SQL`.
+
+## 1. Requisitos
+
+- Docker Desktop en ejecucion (Windows) o Docker Engine + Compose.
+- Opcional: DBeaver, pgAdmin o `psql` para ver las tablas.
+- Mas adelante: Node.js y Bruno/Postman para probar tus endpoints.
+
+## 2. Crear y levantar la base de datos
+
+**Windows PowerShell** (ejecutar dentro del proyecto):
+
+```powershell
+Copy-Item .env.example .env
+docker compose up -d
+docker compose ps
+```
+
+**Linux / macOS:**
+
+```bash
+cp .env.example .env
+docker compose up -d
+docker compose ps
+```
+
+Comprobar que existan las tablas:
+
+```bash
+docker compose exec postgres psql -U logica_user -d logica_api -c '\dt'
+```
+
+Si quieres abrir el cliente interactivo:
+
+```bash
+docker compose exec postgres psql -U logica_user -d logica_api
+```
+
+Prueba estas consultas en `psql` (termina con `;`):
+
+```sql
+SELECT id, nombres, correo, tipo_cliente FROM clientes;
+SELECT id, sku, nombre, precio, stock FROM productos ORDER BY id;
+SELECT referencia, estado, total FROM pedidos;
+```
+
+Para salir de `psql` usa `\q`.
+
+## 3. Conectar DBeaver, pgAdmin o Node.js
+
+| Campo | Valor de laboratorio |
+|---|---|
+| Host | `localhost` |
+| Puerto | `5435` |
+| Base de datos | `logica_api` |
+| Usuario | `logica_user` |
+| Contraseña | `practica_local_123` (en tu `.env`) |
+
+Estos valores son **solo para desarrollo local**. El puerto de Docker del host es `5435`; si tu futuro backend corre en otro contenedor de esta misma red Compose, debera usar `postgres:5432` como host/puerto interno.
+
+## 4. Estructura
+
+```text
+logica-api/
+├── .env.example                  # copiar como .env
+├── .gitignore                    # evita subir .env a GitHub
+├── docker-compose.yml            # PostgreSQL 16 y volumen persistente
+├── docker/
+│   └── init/
+│       ├── 01_esquema.sql        # 12 tablas y relaciones
+│       └── 02_datos_prueba.sql   # clientes, productos, pedidos, etc.
+├── practicas/
+│   ├── retos.md                 # retos del mas facil al mas avanzado
+│   ├── cuerpos-post.md         # JSON para probar en Postman/Bruno
+│   └── consultas.sql           # consultas SQL de apoyo
+└── README.md
+```
+
+## 5. Las 12 tablas y su objetivo
+
+| Tabla | Practicas recomendadas |
+|---|---|
+| `clientes` | GET, POST, PUT/PATCH, DELETE logico, filtros VIP/activo |
+| `categorias` | Crear categorias, listar productos relacionados |
+| `productos` | CRUD, filtros de precio, stock y categorias |
+| `cupones` | Condiciones con fechas, usos y descuentos |
+| `pedidos` | Crear una orden, calcular total, cambiar estados |
+| `pedido_detalles` | Recorrer un array con `for...of` y guardar multiples filas |
+| `pagos` | Condicionales por estado y pagos parciales |
+| `movimientos_inventario` | Entradas/salidas y trazabilidad de stock |
+| `envios` | Crear y actualizar seguimiento de un envio |
+| `notificaciones` | Generar mensajes al cumplir ciertas condiciones |
+| `reclamos` | Guardar un tipo de solicitud |
+| `devoluciones` | Guardar otro tipo de solicitud; aprobar o rechazar |
+
+**Relaciones principales:**
+
+```text
+clientes ──────< pedidos ──────< pedido_detalles >────── productos >──── categorias
+   │               │                    │                     │
+   │               ├──────< pagos        └──────< devoluciones │
+   │               ├──────  envios                             │
+   │               └──────< movimientos_inventario >───────────┘
+   │
+   ├──────< notificaciones
+   ├──────< reclamos
+   └──────< devoluciones
+
+cupones ──────< pedidos (opcional)
+```
+
+`<` significa "muchos"; un cliente puede tener muchos pedidos y un pedido muchos detalles. En este laboratorio un pedido tiene como maximo un envio.
+
+## 6. Datos precargados para probar
+
+- 4 clientes: Ana (regular, activa), Luis (VIP, activo), Maria (regular, activa), Pedro (inactivo).
+- 8 productos: incluye uno sin stock (`AUD-001`), uno inactivo (`WEB-001`) y uno bajo stock minimo (`MON-001`).
+- 5 cupones: valido (`BIENVENIDA10`), `VIP15`, vencido, agotado e inactivo.
+- Pedido `DEMO-001`: pagado por Ana, 230.00, 2 productos, pago QR aprobado.
+- Pedido `DEMO-002`: pendiente de Luis, 50.00, 2 cables.
+- Movimientos historicos de salida, un reclamo y una notificacion.
+
+**Moneda de ejemplo:** los importes pueden tratarse como bolivianos (Bs). PostgreSQL guarda `NUMERIC(12,2)` para evitar errores propios de decimales binarios. En Node, cuida el redondeo a dos decimales.
+
+## 7. Tu futuro backend Express
+
+Cuando empieces la practica, puedes crear una carpeta `backend/` con una estructura sencilla:
+
+```text
+backend/
+├── src/
+│   ├── app.js
+│   ├── server.js
+│   ├── config/db.js
+│   ├── routes/
+│   ├── controllers/
+│   ├── services/
+│   └── repositories/
+├── package.json
+└── .env
+```
+
+En tus controladores recibiras JSON en `camelCase` (por ejemplo, `clienteId`) y lo traduciras a columnas SQL `snake_case` (por ejemplo, `cliente_id`).
+
+Recorrido esperado de una peticion:
+
+```text
+Postman / Bruno
+     ↓
+Express (ruta: POST /api/pedidos)
+     ↓
+Controller (lee req.body, envia al service)
+     ↓
+Service (if/else, for...of, calculos, reglas del negocio)
+     ↓
+Repository (consultas SQL parametrizadas)
+     ↓
+PostgreSQL (transaccion, tablas y relaciones)
+     ↓
+Respuesta JSON + codigo HTTP
+```
+
+**Reglas para practicar sin middleware todavia:** pon la validacion en el service (por ahora), no en una libreria. Usa consultas parametrizadas (`$1`, `$2`, ...), no concatenes valores que vengan del cliente. Mas adelante moveras validacion a schemas y seguridad a middlewares.
+
+## 8. Reglas de negocio acordadas para los retos
+
+1. Un cliente inactivo no puede hacer un pedido.
+2. Solo puedes vender productos activos y con `stock >= cantidad`.
+3. Un pedido debe tener al menos un detalle; no se repiten productos en el mismo pedido.
+4. El precio lo lee el backend desde la tabla `productos`; nunca lo confia al body.
+5. Al crear pedido en estado `PENDIENTE`, resta stock y agrega un movimiento `SALIDA` por cada producto **en una unica transaccion**.
+6. Al cancelar un pedido `PENDIENTE`, devuelve stock con un movimiento `ENTRADA` por cada producto; no permite cancelar dos veces. Inicialmente limita cancelar a pendientes.
+7. Un pago aprobado cuenta para lo abonado; uno pendiente o rechazado no. Solo marca `PAGADO` cuando el total aprobado cubre exactamente el total del pedido. Rechaza pagos que excedan el saldo.
+8. Cupones: activo, fecha vigente, no agotado y compra minima; si el codigo `VIP15` se utiliza, el cliente debe ser VIP. Los cupones solo se consumen al confirmar la creacion del pedido en la misma transaccion; se reintegran si cancelas el pedido con cupon.
+9. El `subtotal` es la suma de detalles; `total = subtotal - descuento + costo_envio`.
+10. Solo un pedido `PAGADO` puede avanzar a `ENVIADO`; despues a `ENTREGADO`. Se crea un registro en `envios` al despacharlo.
+11. Una devolucion solamente puede solicitarla el propietario de un pedido `PAGADO` o `ENTREGADO` (para el laboratorio); nunca puede devolver mas unidades de las compradas, considerando devoluciones aprobadas y pendientes.
+12. `POST /api/solicitudes` decide la tabla destino segun `tipo`: `RECLAMO` -> `reclamos`; `DEVOLUCION` -> `devoluciones`.
+
+> **IMPORTANTE:** las restricciones SQL no implementan todas estas reglas; esa es tu tarea en servicios. Para operaciones que afecten varias tablas, usa transacciones `BEGIN`, `COMMIT`, `ROLLBACK`; bloquea filas al comprobar/modificar stock o saldo cuando llegues a concurrencia (`SELECT ... FOR UPDATE`).
+
+## 9. Retos y cuerpos JSON
+
+Empieza en **[practicas/retos.md](practicas/retos.md)** y copia los JSON desde **[practicas/cuerpos-post.md](practicas/cuerpos-post.md)** a Bruno o Postman. Las consultas de apoyo estan en **[practicas/consultas.sql](practicas/consultas.sql)**.
+
+### Que deberia practicar tu API
+
+- `GET /api/productos`: lista y filtros.
+- `POST /api/clientes`: insertar datos.
+- `PATCH /api/productos/:id/stock`: reglas por tipo de movimiento.
+- `POST /api/pedidos`: procesar `items[]`, validar, sumar y guardar cabecera + detalles.
+- `POST /api/pagos`: evaluar estados y saldo.
+- `POST /api/solicitudes`: guardar reclamos o devoluciones en tablas diferentes.
+- `PATCH /api/pedidos/:id/cancelar`: deshacer stock de forma segura.
+
+## 10. Comandos utiles
+
+```bash
+docker compose logs -f postgres       # observar logs
+docker compose exec postgres psql -U logica_user -d logica_api -c 'SELECT COUNT(*) FROM productos;'
+docker compose stop                   # detener sin borrar datos
+docker compose start                  # volver a arrancar
+docker compose down                   # quitar contenedor, conservar volumen
+```
+
+**Recrear desde cero (BORRA TODOS LOS DATOS de este laboratorio):**
+
+```bash
+docker compose down -v
+docker compose up -d
+```
+
+Los scripts de `docker/init/` **solo se ejecutan al crear por primera vez el volumen de PostgreSQL**. Si editas el `.sql` despues, reiniciar el contenedor no vuelve a ejecutar el init. Para conservar datos y evolucionar el esquema, mas adelante aprenderas migraciones.
+
+## 11. Subir a GitHub
+
+Crea un repositorio publico o privado llamado **`logica-api`**, luego desde la carpeta:
+
+```bash
+git init
+git add .
+git commit -m "feat: laboratorio PostgreSQL para practicar API REST"
+git branch -M main
+git remote add origin https://github.com/TU_USUARIO/logica-api.git
+git push -u origin main
+```
+
+Sustituye `TU_USUARIO` por tu usuario real y crea el repositorio en GitHub antes del `git push`. El archivo `.env` queda ignorado; `.env.example` si se comparte porque son credenciales locales de demostracion.
