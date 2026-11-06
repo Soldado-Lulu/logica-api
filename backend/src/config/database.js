@@ -1,20 +1,16 @@
-import pg from 'pg';
+import { Sequelize } from 'sequelize';
 import { env } from './env.js';
 
-const { Pool } = pg;
-
-// Pool reutiliza conexiones. NO crees una conexion nueva en cada endpoint.
-export const pool = new Pool({
+// Una instancia compartida y un pool de conexiones administrado por Sequelize.
+export const sequelize = new Sequelize(env.dbName, env.dbUser, env.dbPassword, {
   host: env.dbHost,
   port: env.dbPort,
-  database: env.dbName,
-  user: env.dbUser,
-  password: env.dbPassword,
-  max: 10,
-  connectionTimeoutMillis: 5000,
+  dialect: 'postgres',
+  logging: false, // Cambia a console.log para ver el SQL generado.
+  pool: { max: 10, min: 0, acquire: 5000, idle: 10000 },
 });
 
 export async function verificarConexion() {
-  const resultado = await pool.query('SELECT NOW() AS fecha_servidor');
-  console.log('PostgreSQL conectado:', resultado.rows[0].fecha_servidor);
+  await sequelize.authenticate();
+  console.log('PostgreSQL conectado mediante Sequelize');
 }

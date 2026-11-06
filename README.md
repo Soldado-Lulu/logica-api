@@ -81,12 +81,14 @@ docker compose stop backend
 Variables en `.env` de la raíz:
 
 ```dotenv
+# Solo para desarrollo local; nunca uses estas claves en produccion.
 DB_NAME=logica_api
-DB_USER=logica_user
-DB_PASSWORD=practica_local_123
+DB_USER=user
+DB_PASSWORD=12345
 DB_HOST=localhost
 DB_PORT=5435
 PORT=3000
+
 ```
 
 Docker Compose sobreescribe `DB_HOST=postgres` y `DB_PORT=5432` **solamente para el contenedor backend**. No debes escribir `localhost:5435` dentro de un contenedor para conectarte a PostgreSQL.
