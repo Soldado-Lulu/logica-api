@@ -9,7 +9,7 @@ import {
   borrarCategoria,
 } from './categorias.controller.js';
 
-import asyncHandler from '../../utils/asyncHandler.js';
+import asyncHandler from '../../middlewares/asyncHandler.js';
 
 import { validarId } from '../../middlewares/validarId.middleware.js';
 

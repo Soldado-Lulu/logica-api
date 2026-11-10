@@ -8,7 +8,7 @@ import {
   consultarClientePorCorreo,
 } from './clientes.repository.js';
 
-import { AppError } from '../../utils/AppError.js';
+import  AppError  from '../../utils/AppError.js';
 
 // Campos que el sistema permite modificar
 const CAMPOS_EDITABLES = new Set([

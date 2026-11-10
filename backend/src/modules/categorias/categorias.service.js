@@ -6,7 +6,7 @@ import {
     modificarCategoria,
     eliminarCategoria} from 'categorias.repository.js'; 
 
-import { AppError } from '../../utils/AppError.js';
+import AppError  from '../../utils/AppError.js';
 
 const CAMPOS_EDITABLES = new Set([
     'nombre',
