@@ -1,26 +1,81 @@
+
 import {
-  consultarClientes, consultarClientePorId, insertarCliente,
-  modificarCliente, eliminarCliente,
+  consultarClientes,
+  consultarClientePorId,
+  insertarCliente,
+  modificarCliente,
+  eliminarCliente,
+  consultarClientePorCorreo,
 } from './clientes.repository.js';
 
-const camposEditables = ['nombres', 'apellidos', 'correo', 'celular', 'tipo_cliente', 'activo'];
+import { AppError } from '../../utils/AppError.js';
 
-function seleccionarCampos(datos) {
-  return Object.fromEntries(Object.entries(datos ?? {}).filter(([clave]) => camposEditables.includes(clave)));
+// Campos que el sistema permite modificar
+const CAMPOS_EDITABLES = new Set([
+  'nombres',
+  'apellidos',
+  'correo',
+  'celular',
+  'tipo_cliente',
+  'activo',
+]);
+
+// Filtrar los campos recibidos
+function seleccionarCamposPermitidos(datos) {
+  const campos = Object.entries(datos ?? {});
+
+  const camposFiltrados = campos.filter(([clave]) =>
+    CAMPOS_EDITABLES.has(clave)
+  );
+
+  return Object.fromEntries(camposFiltrados);
 }
 
-export async function listarClientesService() {
+// Obtener todos los clientes
+export function listarClientesService() {
   return consultarClientes();
 }
-export async function obtenerClienteService(id) {
+
+// Obtener un cliente por ID
+export function obtenerClienteService(id) {
   return consultarClientePorId(id);
 }
-export async function crearClienteService(datos) {
-  return insertarCliente(seleccionarCampos(datos));
+
+// Crear un nuevo cliente
+export function crearClienteService(datos) {
+  const datosPermitidos = seleccionarCamposPermitidos(datos);
+
+  if (Object.keys(datosPermitidos).length === 0) {
+    throw new AppError('Debe enviar datos válidos del cliente', 400);
+  }
+  
+  const {correo} = datosPermitidos;
+  const clienteExistente = consultarClientePorCorreo(correo);
+  
+  if (clienteExistente) {
+    throw new AppError('Ya existe un cliente con ese correo', 400);
+  }
+  return insertarCliente(datosPermitidos);
 }
-export async function actualizarClienteService(id, datos) {
-  return modificarCliente(id, seleccionarCampos(datos));
+
+// Actualizar un cliente
+export function actualizarClienteService(id, datos) {
+  const datosPermitidos = seleccionarCamposPermitidos(datos);
+
+  if (Object.keys(datosPermitidos).length === 0) {
+    throw new AppError('No se enviaron campos para actualizar', 400);
+  }
+
+  return modificarCliente(id, datosPermitidos);
 }
-export async function eliminarClienteService(id) {
+
+// Eliminar un cliente
+export function eliminarClienteService(id) {
   return eliminarCliente(id);
+}
+
+export function buscarClientePorCorreoService(correo) {
+  const cliente = buscarClientePorCorreo(correo);
+
+  return buscarClientePorCorreo(correo);
 }

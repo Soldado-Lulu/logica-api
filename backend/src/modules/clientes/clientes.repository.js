@@ -23,6 +23,17 @@ export async function modificarCliente(id, datos) {
 }
 
 export async function eliminarCliente(id) {
-  // Devuelve 0 cuando no existe. Restricciones FK de PostgreSQL siguen vigentes.
   return Cliente.destroy({ where: { id } });
+}
+
+// Buscar un cliente por correo
+export async function consultarClientePorCorreo(correo) {
+  const cliente = await Cliente.findOne({
+    where: {
+      correo: correo
+    },
+    raw: true
+  });
+
+  return cliente;
 }

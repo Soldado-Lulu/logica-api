@@ -1,5 +1,7 @@
-export const asyncHandler = (funcion) => {
+export default function asyncHandler(funcion) {
   return (req, res, next) => {
-    Promise.resolve(funcion(req, res, next)).catch(next);
+    Promise.resolve()
+      .then(() => funcion(req, res, next))
+      .catch(next);
   };
-};
+}
